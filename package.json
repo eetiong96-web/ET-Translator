@@ -1,0 +1,15 @@
+{
+  "name": "ets-personal-translator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check public/app.js && node --check functions/api/translate.js && node --check functions/_shared/translator.js && node --check scripts/local-server.mjs && node --check index.js",
+    "serve": "node scripts/local-server.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "latest"
+  }
+}
