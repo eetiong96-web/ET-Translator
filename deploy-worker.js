@@ -1189,6 +1189,7 @@ async function readUsageSnapshot(env) {
   const trimmed = logs.slice(0, USAGE_LOG_LIMIT);
   const devices = summarizeByDevice(trimmed);
   await attachNicknames(env, devices);
+  attachLogNicknames(trimmed, devices);
 
   return {
     configured: true,
@@ -1260,6 +1261,16 @@ async function attachNicknames(env, devices) {
   await Promise.all(devices.map(async (device) => {
     device.nickname = await env.USAGE_KV.get(`nickname:${device.deviceKey}`) || "";
   }));
+}
+
+function attachLogNicknames(logs, devices) {
+  const nicknames = new Map(devices.map((device) => [device.deviceKey, device.nickname || ""]));
+
+  for (const log of logs) {
+    const key = createDeviceKey(log.device || {});
+    log.deviceKey = key;
+    log.deviceNickname = nicknames.get(key) || "";
+  }
 }
 
 function createDeviceKey(device = {}) {
@@ -1406,7 +1417,7 @@ function renderUsageHtml(snapshot) {
         <td>${escapeHtml(log.feature)}</td>
         <td>${escapeHtml(log.provider)}</td>
         <td>${escapeHtml(log.model)}</td>
-        <td>${escapeHtml(formatDeviceName(log.device))}</td>
+        <td>${escapeHtml(formatDeviceName(log.device, log.deviceNickname))}</td>
         <td>${number(log.totalTokens)}</td>
         <td>${money(log.costUsd)}</td>
       </tr>`).join("");
@@ -1478,8 +1489,8 @@ function renderUsageHtml(snapshot) {
 </html>`;
 }
 
-function formatDeviceName(device = {}) {
-  const pieces = [device.phoneModel, device.browser, device.screen].filter(Boolean);
+function formatDeviceName(device = {}, nickname = "") {
+  const pieces = [nickname, device.phoneModel, device.browser, device.screen].filter(Boolean);
   return pieces.length ? pieces.join(" / ") : "Unknown";
 }
 
