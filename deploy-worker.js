@@ -331,6 +331,10 @@ export default {
       return handleUsageNickname(request, env);
     }
 
+    if (url.pathname === "/api/usage/clear") {
+      return handleUsageClear(request, env);
+    }
+
     if (url.pathname === "/admin/usage") {
       return handleUsagePage(request, env);
     }
@@ -1085,6 +1089,38 @@ async function handleUsageNickname(request, env) {
   return jsonResponse({ ok: true, deviceKey, nickname });
 }
 
+async function handleUsageClear(request, env) {
+  const authError = validateAdmin(request, env);
+  if (authError) return authError;
+
+  if (request.method !== "POST") {
+    return jsonResponse({ error: "Use POST to clear usage logs." }, 405);
+  }
+
+  if (!env.USAGE_KV) {
+    return jsonResponse({ error: "Missing USAGE_KV binding." }, 500);
+  }
+
+  let deleted = 0;
+  let cursor;
+
+  do {
+    const listed = await env.USAGE_KV.list({
+      prefix: "usage:",
+      cursor,
+      limit: 1000
+    });
+    cursor = listed.cursor;
+
+    await Promise.all(listed.keys.map(async (key) => {
+      await env.USAGE_KV.delete(key.name);
+      deleted += 1;
+    }));
+  } while (cursor);
+
+  return jsonResponse({ ok: true, deleted });
+}
+
 async function handleUsagePage(request, env) {
   const authError = validateAdmin(request, env);
   if (authError) return authError;
@@ -1438,14 +1474,21 @@ function renderUsageHtml(snapshot) {
       table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden}th,td{padding:10px;border-bottom:1px solid #e8edf4;text-align:left;font-size:.9rem;vertical-align:top}
       th{background:#eef3f8;color:#667085}tr:last-child td{border-bottom:0}.notice{padding:14px;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px}
       .hint{margin:8px 0 18px;color:#667085;font-size:.92rem}.time{white-space:nowrap}
+      .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 18px}.toolbar p{margin:0}.clear-usage{border:1px solid #dc2626;border-radius:8px;background:#fff;color:#b91c1c;padding:9px 12px;font-weight:800;cursor:pointer}.clear-usage:disabled{opacity:.6;cursor:not-allowed}.clear-state{color:#667085;font-size:.9rem}
       small{display:block;margin-top:6px;color:#667085}.nickname-form{display:flex;gap:6px;align-items:center}.nickname-form input{min-width:150px;border:1px solid #d9e0ea;border-radius:8px;padding:8px}.nickname-form button{border:1px solid #0f766e;border-radius:8px;background:#0f766e;color:#fff;padding:8px 10px;font-weight:800}.save-state{color:#0f766e;font-size:.82rem}
-      @media(max-width:720px){.cards{grid-template-columns:1fr 1fr}table{display:block;overflow:auto}h1{font-size:1.55rem}}
+      @media(max-width:720px){.cards{grid-template-columns:1fr 1fr}.toolbar{align-items:flex-start;flex-direction:column}table{display:block;overflow:auto}h1{font-size:1.55rem}}
     </style>
   </head>
   <body>
     <main>
       <h1>ET Translator Usage</h1>
-      <p class="muted">Last 7 days, latest ${USAGE_LOG_LIMIT} records. Generated ${escapeHtml(generatedAt)}.</p>
+      <div class="toolbar">
+        <p class="muted">Last 7 days, latest ${USAGE_LOG_LIMIT} records. Generated ${escapeHtml(generatedAt)}.</p>
+        <div>
+          <button id="clearUsageButton" class="clear-usage" type="button">Clear logs</button>
+          <span id="clearUsageState" class="clear-state"></span>
+        </div>
+      </div>
       ${snapshot.configured ? "" : `<p class="notice">${escapeHtml(snapshot.message)}</p>`}
       <section class="cards">
         <div class="card"><span class="muted">Calls</span><strong>${number(snapshot.summary.calls)}</strong></div>
@@ -1467,6 +1510,29 @@ function renderUsageHtml(snapshot) {
     </main>
     <script>
       const pin = new URLSearchParams(location.search).get("pin") || "";
+      const clearButton = document.getElementById("clearUsageButton");
+      const clearState = document.getElementById("clearUsageState");
+      clearButton?.addEventListener("click", async () => {
+        const ok = confirm("Clear all backend usage logs? Nicknames will be kept.");
+        if (!ok) return;
+
+        clearButton.disabled = true;
+        clearState.textContent = "Clearing...";
+
+        const response = await fetch("/api/usage/clear?pin=" + encodeURIComponent(pin), {
+          method: "POST"
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          clearState.textContent = "Cleared " + (result.deleted || 0) + " logs";
+          setTimeout(() => location.reload(), 600);
+        } else {
+          clearState.textContent = "Clear failed";
+          clearButton.disabled = false;
+        }
+      });
+
       for (const form of document.querySelectorAll(".nickname-form")) {
         form.addEventListener("submit", async (event) => {
           event.preventDefault();
