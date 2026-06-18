@@ -4,3 +4,12 @@ node_modules/
 dist/
 coverage/
 *.log
+*.zip
+*.gguf
+artifacts/
+third_party/
+_zip_stage*/
+et-translator-*/
+android-apk/build/
+android-offline-ai/build/
+android-offline-ai/bundled-model/*.gguf

@@ -9,8 +9,9 @@ A mobile-first English to Chinese and Chinese to English translator for PM work 
 - Shows Hanyu Pinyin with tone marks so Chinese text is readable.
 - Explains word meaning for important business terms.
 - Lets you switch between DeepSeek and Gemini from the page.
-- Saves recent translations in the phone browser only.
+- Keeps recent translations in the current browser/app session only.
 - Logs token usage by device when Cloudflare KV is connected.
+- Adds basic daily rate limits to reduce accidental API credit burn.
 
 Supabase is not needed for v1. Add Supabase later only if you want accounts, synced history, a shared team glossary, or admin-managed company terms.
 
@@ -54,6 +55,10 @@ Use this when deploying from GitHub.
    - Value: `gemini-3.5-flash`
    - Name: `ADMIN_PIN`
    - Value: any private PIN you choose for the usage dashboard
+   - Name: `DAILY_DEVICE_LIMIT`
+   - Value: optional, defaults to `50`
+   - Name: `DAILY_TOTAL_LIMIT`
+   - Value: optional, defaults to `200`
 6. Optional usage storage:
    - In Cloudflare, create a KV namespace.
    - Bind it to this Worker with the variable/binding name `USAGE_KV`.
@@ -69,6 +74,8 @@ After adding `ADMIN_PIN` and binding `USAGE_KV`, open:
 ```text
 https://your-worker-url/admin/usage?pin=YOUR_PIN
 ```
+
+After the dashboard opens, the app removes the PIN from the browser address bar and uses a short admin session cookie for dashboard actions.
 
 The dashboard shows calls, token usage, estimated cost, and device grouping. Exact phone model is only available when the browser or Android APK sends it. Normal mobile browsers may hide the model for privacy.
 

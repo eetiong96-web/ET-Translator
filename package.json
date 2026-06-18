@@ -10,6 +10,6 @@
     "serve": "node scripts/local-server.mjs"
   },
   "devDependencies": {
-    "wrangler": "latest"
+    "wrangler": "4.100.0"
   }
 }
