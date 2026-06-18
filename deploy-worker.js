@@ -327,6 +327,10 @@ export default {
       return handleUsageApi(request, env);
     }
 
+    if (url.pathname === "/api/usage/nickname") {
+      return handleUsageNickname(request, env);
+    }
+
     if (url.pathname === "/admin/usage") {
       return handleUsagePage(request, env);
     }
@@ -1052,6 +1056,35 @@ async function handleUsageApi(request, env) {
   return jsonResponse(snapshot);
 }
 
+async function handleUsageNickname(request, env) {
+  const authError = validateAdmin(request, env);
+  if (authError) return authError;
+
+  if (request.method !== "POST") {
+    return jsonResponse({ error: "Use POST for nickname updates." }, 405);
+  }
+
+  if (!env.USAGE_KV) {
+    return jsonResponse({ error: "Missing USAGE_KV binding." }, 500);
+  }
+
+  const payload = await request.json();
+  const deviceKey = cleanNicknameKey(payload.deviceKey || "");
+  const nickname = cleanNickname(payload.nickname || "");
+
+  if (!deviceKey) {
+    return jsonResponse({ error: "Missing device key." }, 400);
+  }
+
+  if (nickname) {
+    await env.USAGE_KV.put(`nickname:${deviceKey}`, nickname);
+  } else {
+    await env.USAGE_KV.delete(`nickname:${deviceKey}`);
+  }
+
+  return jsonResponse({ ok: true, deviceKey, nickname });
+}
+
 async function handleUsagePage(request, env) {
   const authError = validateAdmin(request, env);
   if (authError) return authError;
@@ -1154,12 +1187,14 @@ async function readUsageSnapshot(env) {
 
   logs.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   const trimmed = logs.slice(0, USAGE_LOG_LIMIT);
+  const devices = summarizeByDevice(trimmed);
+  await attachNicknames(env, devices);
 
   return {
     configured: true,
     generatedAt: new Date().toISOString(),
     summary: summarizeUsage(trimmed),
-    devices: summarizeByDevice(trimmed),
+    devices,
     logs: trimmed
   };
 }
@@ -1190,8 +1225,9 @@ function summarizeByDevice(logs) {
 
   for (const log of logs) {
     const device = log.device || {};
-    const key = device.deviceId || `${device.phoneModel || "Unknown"}|${device.userAgent || ""}`.slice(0, 80);
+    const key = createDeviceKey(device);
     const existing = map.get(key) || {
+      deviceKey: key,
       deviceId: device.deviceId || "",
       deviceLabel: device.deviceLabel || "",
       phoneModel: device.phoneModel || "Unknown",
@@ -1218,6 +1254,24 @@ function summarizeByDevice(logs) {
   }
 
   return Array.from(map.values()).sort((a, b) => b.costUsd - a.costUsd || b.calls - a.calls);
+}
+
+async function attachNicknames(env, devices) {
+  await Promise.all(devices.map(async (device) => {
+    device.nickname = await env.USAGE_KV.get(`nickname:${device.deviceKey}`) || "";
+  }));
+}
+
+function createDeviceKey(device = {}) {
+  return cleanNicknameKey(device.deviceId || `${device.phoneModel || "Unknown"}|${device.userAgent || ""}`.slice(0, 80));
+}
+
+function cleanNicknameKey(value) {
+  return String(value || "").replace(/[^\w .:/()[\]-]/g, "").slice(0, 140);
+}
+
+function cleanNickname(value) {
+  return String(value || "").replace(/[<>]/g, "").trim().slice(0, 40);
 }
 
 function normalizeUsage(usage = {}) {
@@ -1330,7 +1384,14 @@ function renderUsageHtml(snapshot) {
   const rows = snapshot.devices.map((device) => `
       <tr>
         <td>${escapeHtml(device.phoneModel)}</td>
-        <td>${escapeHtml(device.deviceLabel || "-")}</td>
+        <td>
+          <form class="nickname-form" data-device-key="${escapeHtml(device.deviceKey)}">
+            <input name="nickname" value="${escapeHtml(device.nickname || "")}" placeholder="Add nickname">
+            <button type="submit">Save</button>
+            <span class="save-state"></span>
+          </form>
+          <small>${escapeHtml(device.deviceLabel || "-")}</small>
+        </td>
         <td>${escapeHtml(device.platform || "-")}</td>
         <td>${escapeHtml(device.browser || "-")}</td>
         <td>${escapeHtml(device.screen || "-")}</td>
@@ -1366,6 +1427,7 @@ function renderUsageHtml(snapshot) {
       table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden}th,td{padding:10px;border-bottom:1px solid #e8edf4;text-align:left;font-size:.9rem;vertical-align:top}
       th{background:#eef3f8;color:#667085}tr:last-child td{border-bottom:0}.notice{padding:14px;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px}
       .hint{margin:8px 0 18px;color:#667085;font-size:.92rem}.time{white-space:nowrap}
+      small{display:block;margin-top:6px;color:#667085}.nickname-form{display:flex;gap:6px;align-items:center}.nickname-form input{min-width:150px;border:1px solid #d9e0ea;border-radius:8px;padding:8px}.nickname-form button{border:1px solid #0f766e;border-radius:8px;background:#0f766e;color:#fff;padding:8px 10px;font-weight:800}.save-state{color:#0f766e;font-size:.82rem}
       @media(max-width:720px){.cards{grid-template-columns:1fr 1fr}table{display:block;overflow:auto}h1{font-size:1.55rem}}
     </style>
   </head>
@@ -1392,6 +1454,26 @@ function renderUsageHtml(snapshot) {
         <tbody>${logRows || `<tr><td colspan="7" class="muted">No recent calls yet.</td></tr>`}</tbody>
       </table>
     </main>
+    <script>
+      const pin = new URLSearchParams(location.search).get("pin") || "";
+      for (const form of document.querySelectorAll(".nickname-form")) {
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const status = form.querySelector(".save-state");
+          status.textContent = "Saving...";
+          const response = await fetch("/api/usage/nickname?pin=" + encodeURIComponent(pin), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              deviceKey: form.dataset.deviceKey,
+              nickname: form.elements.nickname.value
+            })
+          });
+          status.textContent = response.ok ? "Saved" : "Error";
+          if (response.ok) setTimeout(() => location.reload(), 450);
+        });
+      }
+    </script>
   </body>
 </html>`;
 }
