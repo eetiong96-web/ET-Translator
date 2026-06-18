@@ -10,6 +10,7 @@ A mobile-first English to Chinese and Chinese to English translator for PM work 
 - Explains word meaning for important business terms.
 - Lets you switch between DeepSeek and Gemini from the page.
 - Saves recent translations in the phone browser only.
+- Logs token usage by device when Cloudflare KV is connected.
 
 Supabase is not needed for v1. Add Supabase later only if you want accounts, synced history, a shared team glossary, or admin-managed company terms.
 
@@ -51,9 +52,25 @@ Use this when deploying from GitHub.
    - Value: `deepseek-v4-flash`
    - Name: `GEMINI_MODEL`
    - Value: `gemini-3.5-flash`
-6. Deploy and share the Cloudflare Worker URL with friends.
+   - Name: `ADMIN_PIN`
+   - Value: any private PIN you choose for the usage dashboard
+6. Optional usage storage:
+   - In Cloudflare, create a KV namespace.
+   - Bind it to this Worker with the variable/binding name `USAGE_KV`.
+   - Without `USAGE_KV`, translation still works but usage will not be stored.
+7. Deploy and share the Cloudflare Worker URL with friends.
 
 This project uses `index.js` as the Worker file. That one file serves the web page and also handles `/api/translate`, so Cloudflare must deploy it as a Worker, not as static assets only.
+
+## Usage Dashboard
+
+After adding `ADMIN_PIN` and binding `USAGE_KV`, open:
+
+```text
+https://your-worker-url/admin/usage?pin=YOUR_PIN
+```
+
+The dashboard shows calls, token usage, estimated cost, and device grouping. Exact phone model is only available when the browser or Android APK sends it. Normal mobile browsers may hide the model for privacy.
 
 ## Tests
 
