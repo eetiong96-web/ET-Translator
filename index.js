@@ -1438,6 +1438,32 @@ function attachLogNicknames(logs, devices) {
   }
 }
 
+function groupRecentLogs(logs) {
+  const groups = new Map();
+
+  for (const log of logs.slice(0, 80)) {
+    const key = log.deviceKey || createDeviceKey(log.device || {});
+    const existing = groups.get(key) || {
+      key,
+      label: formatDeviceName(log.device, log.deviceNickname),
+      calls: 0,
+      totalTokens: 0,
+      costUsd: 0,
+      lastSeen: log.ts,
+      logs: []
+    };
+
+    existing.calls += 1;
+    existing.totalTokens += Number(log.totalTokens || 0);
+    existing.costUsd += Number(log.costUsd || 0);
+    if (String(log.ts) > String(existing.lastSeen)) existing.lastSeen = log.ts;
+    existing.logs.push(log);
+    groups.set(key, existing);
+  }
+
+  return Array.from(groups.values()).sort((a, b) => String(b.lastSeen).localeCompare(String(a.lastSeen)));
+}
+
 function createDeviceKey(device = {}) {
   return cleanNicknameKey(device.deviceId || `${device.phoneModel || "Unknown"}|${device.userAgent || ""}`.slice(0, 80));
 }
@@ -1576,16 +1602,30 @@ function renderUsageHtml(snapshot) {
         <td>${money(device.costUsd)}</td>
         <td>${escapeHtml(formatDashboardTime(device.lastSeen))}</td>
       </tr>`).join("");
-  const logRows = snapshot.logs.slice(0, 80).map((log) => `
-      <tr>
-        <td>${escapeHtml(formatDashboardTime(log.ts))}</td>
-        <td>${escapeHtml(log.feature)}</td>
-        <td>${escapeHtml(log.provider)}</td>
-        <td>${escapeHtml(log.model)}</td>
-        <td>${escapeHtml(formatDeviceName(log.device, log.deviceNickname))}</td>
-        <td>${number(log.totalTokens)}</td>
-        <td>${money(log.costUsd)}</td>
-      </tr>`).join("");
+  const recentGroups = groupRecentLogs(snapshot.logs);
+  const logGroups = recentGroups.map((group, index) => {
+    const logRows = group.logs.map((log) => `
+          <tr>
+            <td>${escapeHtml(formatDashboardTime(log.ts))}</td>
+            <td>${escapeHtml(log.feature)}</td>
+            <td>${escapeHtml(log.provider)}</td>
+            <td>${escapeHtml(log.model)}</td>
+            <td>${number(log.totalTokens)}</td>
+            <td>${money(log.costUsd)}</td>
+          </tr>`).join("");
+
+    return `
+      <details class="device-log-group" ${index === 0 ? "open" : ""}>
+        <summary>
+          <span class="device-log-name">${escapeHtml(group.label)}</span>
+          <span class="device-log-meta">${number(group.calls)} calls | ${number(group.totalTokens)} tokens | ${money(group.costUsd)} | Last ${escapeHtml(formatDashboardTime(group.lastSeen))}</span>
+        </summary>
+        <table class="recent-table">
+          <thead><tr><th>Time</th><th>Feature</th><th>Provider</th><th>Model</th><th>Tokens</th><th>Cost</th></tr></thead>
+          <tbody>${logRows}</tbody>
+        </table>
+      </details>`;
+  }).join("");
 
   return `<!doctype html>
 <html lang="en">
@@ -1604,8 +1644,9 @@ function renderUsageHtml(snapshot) {
       th{background:#eef3f8;color:#667085}tr:last-child td{border-bottom:0}.notice{padding:14px;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px}
       .hint{margin:8px 0 18px;color:#667085;font-size:.92rem}.time{white-space:nowrap}
       .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 18px}.toolbar p{margin:0}.clear-usage{border:1px solid #dc2626;border-radius:8px;background:#fff;color:#b91c1c;padding:9px 12px;font-weight:800;cursor:pointer}.clear-usage:disabled{opacity:.6;cursor:not-allowed}.clear-state{color:#667085;font-size:.9rem}
+      .device-log-group{border:1px solid #d9e0ea;border-radius:8px;background:#fff;box-shadow:0 12px 28px rgba(23,32,42,.07);margin:10px 0;overflow:hidden}.device-log-group summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;cursor:pointer;list-style:none}.device-log-group summary::-webkit-details-marker{display:none}.device-log-group summary:before{content:"+";display:inline-grid;place-items:center;flex:0 0 22px;width:22px;height:22px;border-radius:999px;background:#eef3f8;color:#0f766e;font-weight:900}.device-log-group[open] summary:before{content:"-"}.device-log-name{font-weight:900}.device-log-meta{margin-left:auto;color:#667085;font-size:.88rem;text-align:right}.recent-table{border:0;border-top:1px solid #e8edf4;border-radius:0;box-shadow:none}
       small{display:block;margin-top:6px;color:#667085}.nickname-form{display:flex;gap:6px;align-items:center}.nickname-form input{min-width:150px;border:1px solid #d9e0ea;border-radius:8px;padding:8px}.nickname-form button{border:1px solid #0f766e;border-radius:8px;background:#0f766e;color:#fff;padding:8px 10px;font-weight:800}.save-state{color:#0f766e;font-size:.82rem}
-      @media(max-width:720px){.cards{grid-template-columns:1fr 1fr}.toolbar{align-items:flex-start;flex-direction:column}table{display:block;overflow:auto}h1{font-size:1.55rem}}
+      @media(max-width:720px){.cards{grid-template-columns:1fr 1fr}.toolbar{align-items:flex-start;flex-direction:column}.device-log-group summary{align-items:flex-start;flex-wrap:wrap}.device-log-meta{flex-basis:100%;margin-left:34px;text-align:left}table{display:block;overflow:auto}h1{font-size:1.55rem}}
     </style>
   </head>
   <body>
@@ -1632,10 +1673,7 @@ function renderUsageHtml(snapshot) {
         <tbody>${rows || `<tr><td colspan="9" class="muted">No usage logged yet.</td></tr>`}</tbody>
       </table>
       <h2>Recent Calls</h2>
-      <table>
-        <thead><tr><th>Time</th><th>Feature</th><th>Provider</th><th>Model</th><th>Device</th><th>Tokens</th><th>Cost</th></tr></thead>
-        <tbody>${logRows || `<tr><td colspan="7" class="muted">No recent calls yet.</td></tr>`}</tbody>
-      </table>
+      ${logGroups || `<p class="notice muted">No recent calls yet.</p>`}
     </main>
     <script>
       const params = new URLSearchParams(location.search);
