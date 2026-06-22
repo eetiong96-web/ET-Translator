@@ -1,4 +1,4 @@
-name = "et-business-translator"
+name = "ettranslate"
 main = "index.js"
 compatibility_date = "2026-06-12"
 workers_dev = true
