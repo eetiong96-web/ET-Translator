@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f766e">
+    <title>ET Translator</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <p class="eyebrow" data-i18n="brand">English ⇄ Chinese</p>
+          <h1 data-i18n="title">ET Translator</h1>
+        </div>
+        <div class="topbar-actions">
+          <div class="language-toggle" id="pageLanguageControl" role="group" aria-label="Page language">
+            <button type="button" class="language-option active" data-lang="en">ENG</button>
+            <button type="button" class="language-option" data-lang="zh">中文</button>
+          </div>
+          <div class="status-pill" id="connectionStatus" data-status="Ready">Ready</div>
+        </div>
+      </header>
+
+      <nav class="mode-tabs" id="modeTabs" aria-label="Main mode">
+        <button type="button" class="mode-tab active" data-mode="translate" data-i18n="translateTab">Translate</button>
+        <button type="button" class="mode-tab" data-mode="ask" data-i18n="askTab">Ask AI</button>
+      </nav>
+
+      <section class="mode-view active" id="translateView">
+        <section class="translator-grid" aria-label="Translator">
+          <form class="panel input-panel" id="translatorForm">
+            <div class="field-head">
+              <label for="sourceText" data-i18n="textLabel">Text</label>
+              <span id="charCount">0 / 5000</span>
+            </div>
+            <textarea
+              id="sourceText"
+              name="sourceText"
+              rows="10"
+              maxlength="5000"
+              spellcheck="true"
+              placeholder="Paste a work chat, meeting note, PRD line, or email sentence."
+              data-i18n-placeholder="sourcePlaceholder"
+            ></textarea>
+
+            <div class="control-row">
+              <div>
+                <span class="control-label" data-i18n="directionLabel">Direction</span>
+                <div class="segmented two-way" id="directionControl" role="group" aria-label="Translation direction" data-i18n-aria="directionAria">
+                  <button type="button" class="segment active" data-direction="en-zh">EN → 中文</button>
+                  <button type="button" class="segment" data-direction="zh-en">中文 → EN</button>
+                </div>
+              </div>
+
+              <div>
+                <span class="control-label" data-i18n="toneLabel">Tone</span>
+                <div class="segmented" id="toneControl" role="group" aria-label="Tone" data-i18n-aria="toneAria">
+                  <button type="button" class="segment active" data-tone="business" data-i18n="toneBusiness">Business</button>
+                  <button type="button" class="segment" data-tone="plain" data-i18n="tonePlain">Plain</button>
+                  <button type="button" class="segment" data-tone="polished" data-i18n="tonePolished">Polished</button>
+                </div>
+              </div>
+
+              <div>
+                <span class="control-label" data-i18n="providerLabel">AI</span>
+                <div class="segmented two-way" id="providerControl" role="group" aria-label="AI provider" data-i18n-aria="providerAria">
+                  <button type="button" class="segment active" data-provider="deepseek">DeepSeek</button>
+                  <button type="button" class="segment" data-provider="gemini">Gemini</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="action-row">
+              <button type="submit" class="primary-button" id="translateButton" data-i18n="translateButton">Translate</button>
+              <button type="button" class="ghost-button" id="pasteButton" data-i18n="pasteButton">Paste</button>
+              <button type="button" class="ghost-button" id="clearButton" data-i18n="clearButton">Clear</button>
+            </div>
+            <p class="error-text" id="errorText" role="alert"></p>
+          </form>
+
+          <section class="panel output-panel" aria-label="Translation result">
+            <div class="result-head">
+              <div>
+                <span class="control-label" data-i18n="translationLabel">Translation</span>
+                <p class="language-pair" id="languagePair" data-i18n="waitingText">Waiting for text</p>
+              </div>
+              <button type="button" class="ghost-button small" id="copyTranslationButton" data-i18n="copyButton">Copy</button>
+            </div>
+            <p class="translation-text" id="translationText" data-i18n="translationPlaceholder">Your translation will appear here.</p>
+
+            <div class="result-block">
+              <div class="result-head compact">
+                <h2 data-i18n="pinyinLabel">Hanyu Pinyin</h2>
+                <button type="button" class="ghost-button small" id="copyPinyinButton" data-i18n="copyButton">Copy</button>
+              </div>
+              <p id="pinyinText" class="pinyin-text" data-i18n="pinyinPlaceholder">Pinyin appears when Chinese text is involved.</p>
+            </div>
+
+            <div class="result-block">
+              <h2 data-i18n="meaningLabel">Meaning</h2>
+              <p id="meaningText" data-i18n="meaningPlaceholder">Plain meaning appears here.</p>
+            </div>
+
+            <div class="result-block">
+              <h2 data-i18n="termsLabel">Business Terms</h2>
+              <ul id="termsList" class="terms-list">
+                <li class="empty-state" data-i18n="termsPlaceholder">Key terms and word meanings appear here.</li>
+              </ul>
+            </div>
+
+            <div class="result-block">
+              <h2 data-i18n="alternativesLabel">Alternatives</h2>
+              <ul id="alternativesList" class="alternatives-list">
+                <li class="empty-state" data-i18n="alternativesPlaceholder">Alternate phrasing appears here.</li>
+              </ul>
+            </div>
+          </section>
+        </section>
+
+        <section class="history-panel" aria-label="Recent translations" data-i18n-aria="historyAria">
+          <div class="history-head">
+            <h2 data-i18n="recentLabel">Recent</h2>
+            <button type="button" class="ghost-button small" id="clearHistoryButton" data-i18n="clearButton">Clear</button>
+          </div>
+          <div id="historyList" class="history-list"></div>
+        </section>
+      </section>
+
+      <section class="mode-view ask-view" id="askView">
+        <form class="panel ask-chat-panel" id="askForm" aria-label="Ask AI chat">
+          <div class="ask-chat-head">
+            <div>
+              <span class="control-label" data-i18n="askResultLabel">AI Answer</span>
+              <p class="language-pair" id="askModeLabel" data-i18n="askWaitingText">Waiting for your question</p>
+            </div>
+            <button type="button" class="ghost-button small" id="copyAskButton" data-i18n="copyButton">Copy</button>
+          </div>
+
+          <div class="control-row ask-controls">
+            <div>
+              <span class="control-label" data-i18n="askDirectionLabel">Direction</span>
+              <div class="segmented two-way" id="askDirectionControl" role="group" aria-label="Ask AI translation direction" data-i18n-aria="askDirectionAria">
+                <button type="button" class="segment active" data-ask-direction="en-zh">EN -&gt; CN</button>
+                <button type="button" class="segment" data-ask-direction="zh-en">CN -&gt; EN</button>
+              </div>
+            </div>
+
+            <div>
+              <span class="control-label" data-i18n="providerLabel">AI</span>
+              <div class="segmented two-way" id="askProviderControl" role="group" aria-label="AI provider" data-i18n-aria="providerAria">
+                <button type="button" class="segment active" data-ask-provider="deepseek">DeepSeek</button>
+                <button type="button" class="segment" data-ask-provider="gemini">Gemini</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="ask-messages" id="askMessages" aria-live="polite">
+            <div class="ask-empty-state" id="askEmptyState" data-i18n="askResultPlaceholder">AI translation will appear here.</div>
+          </div>
+
+          <div class="ask-composer">
+            <div class="field-head">
+              <label for="askText" data-i18n="askTextLabel">Ask AI</label>
+              <span id="askCharCount">0 / 5000</span>
+            </div>
+            <textarea
+              id="askText"
+              name="askText"
+              rows="3"
+              maxlength="5000"
+              spellcheck="true"
+              placeholder="Ask AI anything. Example: translate this, make it natural, or explain the meaning."
+              data-i18n-placeholder="askPlaceholder"
+            ></textarea>
+            <div class="ask-action-row">
+              <button type="submit" class="primary-button" id="askButton" data-i18n="askButton">Ask AI</button>
+              <button type="button" class="ghost-button" id="askPasteButton" data-i18n="pasteButton">Paste</button>
+              <button type="button" class="ghost-button" id="askClearButton" data-i18n="clearButton">Clear</button>
+            </div>
+            <p class="error-text" id="askErrorText" role="alert"></p>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
