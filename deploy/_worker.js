@@ -621,7 +621,6 @@ Return only valid JSON. Use exactly this JSON shape:
       }
     ],
     response_format: { type: "json_object" },
-    thinking: { type: "disabled" },
     max_tokens: 1800,
     stream: false
   };
@@ -679,7 +678,6 @@ Return only valid JSON in this shape:
       }
     ],
     response_format: { type: "json_object" },
-    thinking: { type: "disabled" },
     max_tokens: 1200,
     stream: false
   };
