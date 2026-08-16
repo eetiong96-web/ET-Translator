@@ -621,7 +621,7 @@ Return only valid JSON. Use exactly this JSON shape:
       }
     ],
     response_format: { type: "json_object" },
-    max_tokens: 1800,
+    max_tokens: 2400,
     stream: false
   };
 }
@@ -678,7 +678,7 @@ Return only valid JSON in this shape:
       }
     ],
     response_format: { type: "json_object" },
-    max_tokens: 1200,
+    max_tokens: 1600,
     stream: false
   };
 }
@@ -941,8 +941,16 @@ function parseOpenAIResponse(payload) {
 }
 
 function parseDeepSeekResponse(payload) {
-  const outputText = payload?.choices?.[0]?.message?.content || "";
-  if (!outputText) throw new Error("DeepSeek returned no text.");
+  const choice = payload?.choices?.[0];
+  const outputText = choice?.message?.content || "";
+
+  if (!outputText) {
+    const reason = choice?.finish_reason;
+    if (reason === "length") {
+      throw new Error("DeepSeek hit the output limit. Try shorter text.");
+    }
+    throw new Error("DeepSeek returned an empty response. Please try again.");
+  }
 
   return normalizeTranslationPayload(parseJsonText(outputText));
 }
